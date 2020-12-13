@@ -17,8 +17,8 @@ class Graph():
         self.graph = maxflow.Graph[float]()
         self.node_ids = self.graph.add_grid_nodes((self.h, self.w))
         # print(self.node_ids)
-        self.vertical_seams = np.zeros((self.h-1, self.w, 13))
-        self.horizontal_seams = np.zeros((self.h, self.w-1, 13))
+        self.vertical_seams = np.zeros((self.h-1, self.w, 13), np.float64)
+        self.horizontal_seams = np.zeros((self.h, self.w-1, 13), np.float64)
         self.best_opt = []
 
     def init_graph(self, new_patch):
@@ -198,7 +198,7 @@ class Graph():
         #     tedges.append((self.node_ids[(new_t+new_b)//2][(new_l+new_r)//2], 0, np.inf)) 
         return nodes, edges, tedges
 
-    def blend(self, pattern, row=-1, col=-1, mode='random', k=10, new_pattern_size=None):
+    def match_patch(self, pattern, row=-1, col=-1, mode='random', k=10, new_pattern_size=None):
         if mode == 'opt_sub':
             h, w = pattern.shape[:2]
             if new_pattern_size is None:
@@ -209,31 +209,55 @@ class Graph():
                               col_rand:col_rand+new_pattern_size[1]]
         h, w = pattern.shape[:2]
         print(h, w)
-        max_overlap = max(int(h*w*0.8), h*w-self.h*self.w+self.filled.sum())
+        max_overlap = max(int(h*w*0.7), h*w-self.h*self.w+self.filled.sum())
         min_overlap = int(h*w*0.1)
         min_cost = np.inf
         if row == -1 or col == -1:
             if mode == 'random':
-                row = np.random.randint(0, self.h-h+1)
-                col = np.random.randint(0, self.w-w+1)
+                row = np.random.randint(0, self.h-h+1) if row == -1 else row
+                col = np.random.randint(0, self.w-w+1) if col == -1 else col
             elif mode == 'opt_whole' or mode == 'opt_sub':
-                row_range = list(range(0, self.h-h+1, 1)) if row == -1 else [row]
-                col_range = list(range(0, self.w-w+1, 1)
-                                 ) if col == -1 else [col]
-                cost_table, mask_count = self.fast_cost_fn(pattern, row_range, col_range)
+                row_range = list(range(0, self.h-h+1, 1)) #if row == -1 else [row]
+                col_range = list(range(0, self.w-w+1, 1)) #if col == -1 else [col]
+                cost_table, mask_count = self.fast_cost_fn(
+                    pattern, row_range, col_range)
                 # min_idx = cost_table.reshape((-1)).argmin()
                 cost_table_flatten = cost_table.reshape((-1))
                 mask_count_flatten = mask_count.reshape((-1))
                 valid_mask = (mask_count_flatten <= max_overlap) * \
                     (mask_count_flatten >= min_overlap)
-                if valid_mask.sum() == 0:
-                    p_table_flatten = (mask_count_flatten == mask_count_flatten.min()).astype(np.float32)
+                
+                col_num = len(col_range)
+                valid_count = valid_mask.sum()
+                min_mask_count = mask_count_flatten.min()
+                if row != -1:
+                    valid_count = valid_mask.reshape((-1, col_num))[row, :].sum()
+                    min_mask_count = mask_count_flatten.reshape(
+                        (-1, col_num))[row, :].min()
+                if col != -1:
+                    valid_count = valid_mask.reshape((-1, col_num))[:, col].sum()
+                    min_mask_count = mask_count_flatten.reshape(
+                        (-1, col_num))[:, col].min()
+                if valid_count == 0:
+                    p_table_flatten = (
+                        mask_count_flatten == min_mask_count).astype(np.float32)
+                    print('vali_count', valid_count)
                 else:
                     sigma = np.std(pattern.reshape(-1, 3), axis=0)
                     sigma_sqr = (sigma*sigma).sum()
                     p_table_flatten = -cost_table_flatten*k/sigma_sqr
                     p_table_flatten = np.exp(p_table_flatten)
                     p_table_flatten = p_table_flatten*valid_mask
+                if row != -1:
+                    for idx in range(len(p_table_flatten)):
+                        if idx//col_num != row:
+                            # print(idx, idx//cost_table.shape[1])
+                            p_table_flatten[idx] = 0
+                if col != -1:
+                    for idx in range(len(p_table_flatten)):
+                        if idx%col_num != col:
+                            p_table_flatten[idx] = 0
+                print(p_table_flatten)
                 p_table_flatten /= p_table_flatten.sum()
                 p_table_flatten = np.cumsum(p_table_flatten)
                 rand_num = np.random.rand()
@@ -248,15 +272,11 @@ class Graph():
                 self.best_opt.append((row, col))
             else:
                 raise NotImplementedError()
-                # for row_idx in range(0, self.h-h, 10):
-                #     for col_idx in range(0, self.w-w, 10):
-                #         cost = self.cost_fn((row_idx, col_idx, h, w, pattern))
-                #         if cost == 0:
-                #             continue
-                #         if cost < min_cost:
-                #             min_cost = cost
-                #             min_row = row_idx
-                #             min_col = col_idx
+
+        return (row, col, h, w, pattern)
+
+    def blend(self, pattern_info):
+        row, col, h, w, pattern = pattern_info
         nodes, edges, tedges = self.create_graph(None, (row, col, h, w, pattern))
         graph = maxflow.Graph[float]()
         # node_list = graph.add_nodes(len(self.node_ids))
