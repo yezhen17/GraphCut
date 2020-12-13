@@ -1,4 +1,5 @@
 import sys
+import time
 import numpy as np
 
 from graph import Graph
@@ -12,9 +13,9 @@ def main():
     pattern = read_img(path).astype(np.int32)
     h, w = pattern.shape[:2]
 
-    target_h = int(sys.argv[2]) if len(sys.argv) > 2 else int(2*h)
-    target_w = int(sys.argv[3]) if len(sys.argv) > 3 else int(2*w)
-    mode = int(sys.argv[4]) if len(sys.argv) > 4 else 2
+    target_h = int(sys.argv[2]) if len(sys.argv) > 2 else int(1.5*h)
+    target_w = int(sys.argv[3]) if len(sys.argv) > 3 else int(1.5*w)
+    mode = int(sys.argv[4]) if len(sys.argv) > 4 else 4 
 
     g = Graph(target_h, target_w)
     
@@ -46,15 +47,15 @@ def main():
                 # g.show_canvas() 
                 start_row = pattern_info[0]
                 print(start_row)
-        g.show_canvas()
+        # g.show_canvas()
         g.write_canvas('res\\test1.jpg')
             # g.show_canvas()
             # new_h = pattern_info[0]+pattern_info[2]
             # while g.filled.sum() < new_h * g.w:
             #     g.blend(g.match_patch(pattern, mode='opt_whole', row=pattern_info[0]))
             #     g.show_canvas()
-            #     print(g.filled.sum())
-        g.show_canvas()
+            #     print(g.filled.sum()) 
+        # g.show_canvas()
     elif mode == 3:
         g.init_graph(pattern)
         start_row = 0
@@ -72,7 +73,7 @@ def main():
                 # g.show_canvas()
                 start_row = pattern_info[0]
                 print(start_row)
-        g.show_canvas()
+        # g.show_canvas()
         g.write_canvas('res\\test1.jpg')
         # g.show_canvas()
         # new_h = pattern_info[0]+pattern_info[2]
@@ -80,11 +81,19 @@ def main():
         #     g.blend(g.match_patch(pattern, mode='opt_whole', row=pattern_info[0]))
         #     g.show_canvas()
         #     print(g.filled.sum())
-        g.show_canvas()
+        # g.show_canvas()
     elif mode == 4:
         g.init_graph(pattern)
-        g.blend(g.match_patch(pattern, row=0, col=100))
-        g.show_canvas()
+        for i in range(1):
+            g.match_patch(pattern, mode='opt_whole')
+        # g.blend(g.match_patch(pattern, row=96, col=0))
+        # g.blend(g.match_patch(pattern, row=0, col=96))
+        # g.blend(g.match_patch(pattern, row=96, col=96))
+        # g.show_canvas()
+        # g.write_canvas('res\\test1.jpg')
+        # g.blend(g.match_patch(pattern, row=64, col=64))
+        # g.show_canvas()
+        # g.write_canvas('res\\test2.jpg')
 
         # g.blend(pattern, mode='opt_sub', new_pattern_size=(100, 100))
         # break
@@ -94,5 +103,7 @@ def main():
     
 
 if __name__ == '__main__':
+    start = time.time()
     main()
+    print('time', time.time()-start)
 

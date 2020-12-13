@@ -3,13 +3,13 @@ import cv2
 import numpy as np
 
 from img_io import read_img, show_img, write_img
+from viz import plot_graph_2d
 
 INF = 1.0e8
-LARGE = 1.0e12
 
 class Graph():
     def __init__(self, h, w):
-        self.consider_old_seams = True
+        self.consider_old_seams = False
         self.grad_energy = True
         self.w, self.h = w, h
         self.filled = np.zeros((self.h, self.w), np.int32)
@@ -129,7 +129,6 @@ class Graph():
                 # only consider filled pixels
                 if not self.filled[row_idx, col_idx]:
                     continue
-                # nodes.append((row_idx, col_idx))
                 if row_idx < new_b - 1 and self.filled[row_idx+1, col_idx]:
                     # add old seam nodes 
                     if self.consider_old_seams and self.vertical_seams[row_idx, col_idx][0] > 0:
@@ -193,7 +192,6 @@ class Graph():
                     #     continue
                     tedges.append((self.node_ids[row_idx][col_idx], np.inf, 0))
                     sink_tedge_count += 1
-                
         # if src_tedge_count == 0:
         #     tedges.append((self.node_ids[(new_t+new_b)//2][(new_l+new_r)//2], 0, np.inf)) 
         return nodes, edges, tedges
@@ -251,7 +249,6 @@ class Graph():
                 if row != -1:
                     for idx in range(len(p_table_flatten)):
                         if idx//col_num != row:
-                            # print(idx, idx//cost_table.shape[1])
                             p_table_flatten[idx] = 0
                 if col != -1:
                     for idx in range(len(p_table_flatten)):
@@ -270,6 +267,11 @@ class Graph():
                 col = min_idx % len(col_range)
                 print(row, col, cost_table[0][0], mask_count[0, 0])
                 self.best_opt.append((row, col))
+
+                # time for patch matching before speed up
+                # for row_idx in range(0, self.h-h, 1):
+                #     for col_idx in range(0, self.w-w, 1):
+                #         cost = self.cost_fn((row_idx, col_idx, h, w, pattern))
             else:
                 raise NotImplementedError()
 
@@ -279,9 +281,6 @@ class Graph():
         row, col, h, w, pattern = pattern_info
         nodes, edges, tedges = self.create_graph(None, (row, col, h, w, pattern))
         graph = maxflow.Graph[float]()
-        # node_list = graph.add_nodes(len(self.node_ids))
-        # print(node_list)
-        # graph.add_grid_nodes((self.h, self.w))
         final_nodes = graph.add_nodes(len(nodes)+self.h*self.w)
         edge_weights = np.zeros((self.h, self.w, 2))
         for edge in edges:
@@ -295,14 +294,10 @@ class Graph():
             graph.add_tedge(tedge[0], tedge[1], tedge[2])
         flow = graph.maxflow()
         sgm = graph.get_grid_segments(self.node_ids)
-        # print(sgm[row:h, col:w]) 
-        # sgm = sgm * self.filled
-        assert sgm.sum() == sgm[row:row+h, col:col+w].sum()
-        print(sgm.sum()/self.filled[row:row+h, col:col+w].sum())
-        # print((sgm*self.filled)[row:row+h:3, col:col+w:3].astype(int))
-        # exit(0)
         for row_idx in range(row, row+h):
             for col_idx in range(col, col+w):
+
+                # update the old seams
                 if self.consider_old_seams:
                     if row_idx < row+h-1 and self.filled[row_idx, col_idx] and \
                         self.filled[row_idx+1, col_idx]:
@@ -353,11 +348,6 @@ class Graph():
                 if not self.filled[row_idx, col_idx] or self.filled[row_idx, col_idx] and sgm[row_idx, col_idx]:
                         self.canvas[row_idx, col_idx] = pattern[row_idx-row, col_idx-col]
         self.filled[row:row+h, col:col+w] = 1
-        # print(self.filled.sum())
-        # self.show_canvas()
-
-    
-    
 
     def show_canvas(self):
         show_img(self.canvas)
@@ -365,82 +355,15 @@ class Graph():
     def write_canvas(self, fn):
         write_img(self.canvas, fn)
 
-if __name__ == '__main__':
-    
-    # g = Graph(10, 10)
-    # g.init_graph(np.ones((5, 5, 3), np.int32)*2) 
-    # nodes, edges, tedges = g.create_graph(
-    #     None, (2, 2, 5, 5, np.zeros((5, 5, 3)).astype(np.int32)))
-    # graph = maxflow.Graph[float]()
-    # # node_list = graph.add_nodes(len(self.node_ids)) 
-    # # print(node_list)
-    # nodes = graph.add_grid_nodes((g.h, g.w))
-    # for edge in edges:
-    #     x = np.random.randint(2, 10)
-    #     graph.add_edge(edge[0], edge[1], x, x)
-    # for tedge in tedges:
-    #     print(tedge)
-    #     graph.add_tedge(tedge[0], tedge[1], tedge[2])
-    # print(graph.get_grid_segments(nodes))
-    
-    # plot_graph_2d(graph, (10, 10)) 
-    # # g.blend(np.ones((5, 5, 3), np.int32)* 1, mode='opt_whole')
-    # exit(0)  
-
-    
-    path = 'C:\\Users\\13731\\Dropbox\\My PC (LAPTOP-VJ2F61DB)\\Desktop\\green.gif'
-    pattern = read_img(path)
-    h, w = pattern.shape[:2]
-    pattern = pattern.astype(np.int32)
-    # print(pattern.min(), pattern.max())
-    g = Graph(int(3*h), int(3*w))
-    g.init_graph(pattern)
-    print(pattern.shape)
-    print(g.canvas.shape)
-    # cv2.imshow("image", g.canvas.asty pe(np.uint8))
-    # cv2.waitKey() 
-
-    # g.blend(pattern, mode='random', min_row=0, min_col=0) 
-    # g.blend(pattern, mode='random', min_row=0, min_col=w//2)
-    # # g.blend(pattern, mode='random', min_row=0, min_col=w)
-    # # g.blend(pattern, mode='random', min_row=0, min_col=0)
-    # g.blend(pattern, mode='random', min_row=h//2, min_col=0) 
-    # g.blend(pattern, mode='random', min_row=h, min_col=0)
-
-    # g.blend(pattern, row=0, col=144)
-    # g.blend(pattern, row=96, col=0)
-    # # g.blend(pattern, row=96, col=144)
-    # g.blend(pattern, row=64, col=96)
-    # # g.blend(pattern, row=0, col=48)
-    # g.show_canvas()
-    # exit(0) 
-
-
-    while g.filled.sum() < g.h * g.w:
-        g.blend(pattern, mode='opt_whole') 
-        # g.blend(pattern, mode='opt_sub', new_pattern_size=(100, 100))
-        # break
-    # for i in range(7):
-    #     print('after')   
-    #     g.blend(pattern, mode='opt_whole')
-    g.show_canvas()
-    exit(0)
-    for i in range(3): 
-        # g.blend(pattern, int(h*0.5), 0) 
-        g.blend(pattern, mode='opt_whole', min_row=0) 
-    g.blend(pattern, mode='opt_whole', min_col=0)
-    for i in range(3):
-        # g.blend(pattern, int(h*0.5), 0)
-        g.blend(pattern, mode='opt_whole', min_row=int(0.5*h))
-        # g.blend(pattern, mode='opt_whole', min_row=0)
-        # g.blend(pattern, mode='opt_whole', min_row=0)
-        # g.blend(pattern, mode='opt_whole')
-        # g.blend(pattern, w//2, w//2)
-        # g.blend(pattern, w//2, 0)
-    # g.blend(pattern, 0, int(1*w))
-    # g.blend(pattern, int(1*h), 0)
-    # g.blend(pattern, int(1*h), int(1*w))
-    # g.blend(pattern, int(0.25*w), 0)
-    # g.blend(pattern, 0, int(0.25*w))
-    # g.blend(pattern, int(0.25*h), int(0.25*w))
-    exit(0)
+if __name__ == '__main__':   
+    g = Graph(10, 10)
+    g.init_graph(np.ones((5, 5, 3), np.int32)*2) 
+    nodes, edges, tedges = g.create_graph(
+        None, (2, 2, 5, 5, np.zeros((5, 5, 3)).astype(np.int32)))
+    graph = maxflow.Graph[float]()
+    nodes = graph.add_grid_nodes((g.h, g.w))
+    for edge in edges:
+        graph.add_edge(edge[0], edge[1], edge[2], edge[2])
+    for tedge in tedges:
+        graph.add_tedge(tedge[0], tedge[1], tedge[2])
+    plot_graph_2d(graph, (10, 10)) 
