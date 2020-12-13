@@ -5,7 +5,7 @@ import numpy as np
 def read_img(im_fn):
     im = cv2.imread(im_fn)
     if im is None:
-        print('{} cv2.imread failed'.format(im_fn))
+        # print('{} cv2.imread failed'.format(im_fn))
         tmp = imageio.mimread(im_fn)
         if tmp is not None:
             imt = np.array(tmp)

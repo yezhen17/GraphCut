@@ -9,24 +9,25 @@ INF = 1.0e8
 
 class Graph():
     def __init__(self, h, w):
-        self.consider_old_seams = False
-        self.grad_energy = True
+        self.consider_old_seams = True  # whether consider old seams
+        self.grad_energy = True  # whether introduce grad into energy func
         self.w, self.h = w, h
         self.filled = np.zeros((self.h, self.w), np.int32)
         self.canvas = np.zeros((self.h, self.w, 3), np.int32)
         self.graph = maxflow.Graph[float]()
         self.node_ids = self.graph.add_grid_nodes((self.h, self.w))
-        # print(self.node_ids)
         self.vertical_seams = np.zeros((self.h-1, self.w, 13), np.float64)
         self.horizontal_seams = np.zeros((self.h, self.w-1, 13), np.float64)
-        self.best_opt = []
+        # self.best_opt = []
 
+    # start from left-top corner
     def init_graph(self, new_patch):
         new_h, new_w = new_patch.shape[:2]
         self.filled[:new_h, :new_w] = 1
         self.canvas[:new_h, :new_w] = new_patch
-        self.best_opt.append((0, 0))
+        # self.best_opt.append((0, 0))
 
+    # matching cost, fast with summed table and FFT
     def fast_cost_fn(self, new_patch, row_range, col_range):
         new_value = new_patch
         new_h, new_w = new_patch.shape[:2]
@@ -73,7 +74,7 @@ class Graph():
         cost_table = INF*zero_mask+(cost_table/(mask_count+1e-8))*not_zero_mask
         return cost_table, mask_count
 
-
+    # matching cost, slow
     def cost_fn(self, new_patch):
         new_t, new_l, new_h, new_w, new_value = new_patch
         new_r, new_b = min(new_l + new_w, self.w), min(new_t + new_h, self.h)
@@ -83,11 +84,12 @@ class Graph():
         overlap_cost = np.power(canvas_with_mask, 2).astype(np.float64).sum()
         if overlap_count == 0:
             return INF, 0
-        if overlap_count > int((new_h*new_w)*0.9) or overlap_count < int((new_h*new_w)*0.2):
-            return overlap_count * LARGE, overlap_count
+        # if overlap_count > int((new_h*new_w)*0.9) or overlap_count < int((new_h*new_w)*0.2):
+            # return overlap_count * INF, overlap_count
         overlap_cost /= overlap_count 
         return overlap_cost, overlap_count
 
+    # energy func
     def weight_fn(self, new_value, row_idx, col_idx, new_t, new_l, vertical, 
                   ord=2, eps=1e-8, old_value_1=None, old_value_2=None):
         # could specify old_value
@@ -178,12 +180,15 @@ class Graph():
                         edges.append((self.node_ids[row_idx][col_idx], 
                                       self.node_ids[row_idx][col_idx+1],
                                       weight))
+                # to new patch (sink)
                 if row_idx > new_t and not self.filled[row_idx-1, col_idx] or \
                         row_idx < new_b-1 and not self.filled[row_idx+1, col_idx] or \
                         col_idx > new_l and not self.filled[row_idx, col_idx-1] or \
                         col_idx < new_r-1 and not self.filled[row_idx, col_idx+1]:
                     tedges.append((self.node_ids[row_idx][col_idx], 0, np.inf))
                     src_tedge_count += 1
+
+                # from existing region (source)
                 if row_idx == new_t and row_idx > 0 and self.filled[row_idx-1, col_idx] or \
                         row_idx == new_b-1 and row_idx < self.h-1 and self.filled[row_idx+1, col_idx] or \
                         col_idx == new_l and col_idx > 0 and self.filled[row_idx, col_idx-1] or \
@@ -206,7 +211,6 @@ class Graph():
             pattern = pattern[row_rand:row_rand+new_pattern_size[0],
                               col_rand:col_rand+new_pattern_size[1]]
         h, w = pattern.shape[:2]
-        print(h, w)
         max_overlap = max(int(h*w*0.7), h*w-self.h*self.w+self.filled.sum())
         min_overlap = int(h*w*0.1)
         min_cost = np.inf
@@ -239,7 +243,6 @@ class Graph():
                 if valid_count == 0:
                     p_table_flatten = (
                         mask_count_flatten == min_mask_count).astype(np.float32)
-                    print('vali_count', valid_count)
                 else:
                     sigma = np.std(pattern.reshape(-1, 3), axis=0)
                     sigma_sqr = (sigma*sigma).sum()
@@ -254,7 +257,6 @@ class Graph():
                     for idx in range(len(p_table_flatten)):
                         if idx%col_num != col:
                             p_table_flatten[idx] = 0
-                print(p_table_flatten)
                 p_table_flatten /= p_table_flatten.sum()
                 p_table_flatten = np.cumsum(p_table_flatten)
                 rand_num = np.random.rand()
@@ -265,8 +267,7 @@ class Graph():
                         break
                 row = min_idx // len(col_range)
                 col = min_idx % len(col_range)
-                print(row, col, cost_table[0][0], mask_count[0, 0])
-                self.best_opt.append((row, col))
+                # self.best_opt.append((row, col))
 
                 # time for patch matching before speed up
                 # for row_idx in range(0, self.h-h, 1):
@@ -277,6 +278,7 @@ class Graph():
 
         return (row, col, h, w, pattern)
 
+    # blend new patch and existing
     def blend(self, pattern_info):
         row, col, h, w, pattern = pattern_info
         nodes, edges, tedges = self.create_graph(None, (row, col, h, w, pattern))
@@ -354,6 +356,7 @@ class Graph():
     
     def write_canvas(self, fn):
         write_img(self.canvas, fn)
+
 
 if __name__ == '__main__':   
     g = Graph(10, 10)

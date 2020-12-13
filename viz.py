@@ -1,4 +1,5 @@
 # Reference: https://github.com/niranjantdesai/image-blending-graphcuts/blob/master/src/graph_cuts.py
+# No other reference from this repo
 
 import networkx as nx
 import matplotlib.pyplot as plt
